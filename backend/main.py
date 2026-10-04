@@ -14,6 +14,10 @@ from app.api.performance import router as performance_router
 from app.api.deployment import router as deployment_router
 from app.api.git import router as git_router
 from app.api.git_commit import router as git_commit_router
+from app.api.dependency import router as dependency_router
+from app.api.git_branch import router as git_branch_router
+from app.api.pull_request import router as pull_request_router
+from app.api.cicd import router as cicd_router
 
 
 app = FastAPI(
@@ -37,6 +41,10 @@ app.include_router(performance_router)
 app.include_router(deployment_router)
 app.include_router(git_router)
 app.include_router(git_commit_router)
+app.include_router(dependency_router)
+app.include_router(git_branch_router)
+app.include_router(pull_request_router)
+app.include_router(cicd_router)
 
 
 @app.get("/")
