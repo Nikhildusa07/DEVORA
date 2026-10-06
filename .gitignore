@@ -23,3 +23,5 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+devora.db
+.devora_repository_memory.json
