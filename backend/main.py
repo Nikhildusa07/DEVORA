@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.repository import router as repository_router
 from app.api.requirements import router as requirements_router
@@ -47,8 +48,6 @@ from app.api.ai_implementation import (
 from app.api.attendance import router as attendance_router
 
 from app.database import Base, engine
-
-# Import models so SQLAlchemy registers them with Base.metadata.
 from app.models.attendance import AttendanceModel
 
 
@@ -59,14 +58,29 @@ app = FastAPI(
 )
 
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+
+
 @app.on_event("startup")
 def initialize_database():
     Base.metadata.create_all(bind=engine)
 
 
+@app.get("/health")
+def health_check():
+    return {
+        "status": "healthy"
+    }
+
+
 @app.get("/")
 def root():
-
     return {
         "project": "DEVORA",
         "status": "running",

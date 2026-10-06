@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -5,9 +6,13 @@ from pathlib import Path
 
 class TestExecutionService:
 
+    TEST_TIMEOUT_SECONDS = 120
+
     def execute_tests(self, repository_path: str):
 
-        repository = Path(repository_path).resolve()
+        repository = Path(
+            repository_path
+        ).resolve()
 
         if not repository.exists():
             raise FileNotFoundError(
@@ -19,27 +24,109 @@ class TestExecutionService:
                 "Repository path is not a directory."
             )
 
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "pytest"
-            ],
-            cwd=repository,
-            capture_output=True,
-            text=True
+        command = [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests",
+            "-q"
+        ]
+
+        environment = os.environ.copy()
+
+        environment["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
+
+        existing_pythonpath = environment.get(
+            "PYTHONPATH",
+            ""
         )
 
-        return {
-            "repository": str(repository),
-            "command": "pytest",
-            "return_code": result.returncode,
-            "status": "passed" if result.returncode == 0 else "failed",
-            "output": result.stdout,
-            "error": result.stderr,
-            "next_stage": (
-                "review"
-                if result.returncode == 0
-                else "failure_diagnosis"
+        if existing_pythonpath:
+            environment["PYTHONPATH"] = (
+                str(repository)
+                + os.pathsep
+                + existing_pythonpath
             )
-        }
+        else:
+            environment["PYTHONPATH"] = str(
+                repository
+            )
+
+        creation_flags = 0
+
+        if os.name == "nt":
+            creation_flags = (
+                subprocess.CREATE_NEW_PROCESS_GROUP
+            )
+
+        try:
+
+            result = subprocess.run(
+                command,
+                cwd=repository,
+                capture_output=True,
+                text=True,
+                timeout=self.TEST_TIMEOUT_SECONDS,
+                env=environment,
+                creationflags=creation_flags
+            )
+
+            return {
+                "repository": str(repository),
+                "command": "pytest tests -q",
+                "return_code": result.returncode,
+                "status": (
+                    "passed"
+                    if result.returncode == 0
+                    else "failed"
+                ),
+                "output": result.stdout,
+                "error": result.stderr,
+                "timeout": False,
+                "next_stage": (
+                    "review"
+                    if result.returncode == 0
+                    else "failure_diagnosis"
+                )
+            }
+
+        except subprocess.TimeoutExpired as error:
+
+            output = ""
+
+            if error.stdout:
+                output = (
+                    error.stdout.decode()
+                    if isinstance(
+                        error.stdout,
+                        bytes
+                    )
+                    else error.stdout
+                )
+
+            error_output = ""
+
+            if error.stderr:
+                error_output = (
+                    error.stderr.decode()
+                    if isinstance(
+                        error.stderr,
+                        bytes
+                    )
+                    else error.stderr
+                )
+
+            return {
+                "repository": str(repository),
+                "command": "pytest tests -q",
+                "return_code": -1,
+                "status": "failed",
+                "output": output,
+                "error": (
+                    "Test execution timed out after "
+                    f"{self.TEST_TIMEOUT_SECONDS} seconds.\n"
+                    f"{error_output}"
+                ),
+                "timeout": True,
+                "next_stage": "failure_diagnosis"
+            }

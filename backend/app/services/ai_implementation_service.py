@@ -17,6 +17,10 @@ class AIImplementationService:
         "gemini-3.8-flash"
     ]
 
+    PROTECTED_FILES = {
+        "main.py"
+    }
+
     def __init__(self):
 
         api_key = os.getenv("GEMINI_API_KEY")
@@ -158,8 +162,10 @@ RULES:
 10. Do not introduce a new database framework unless required.
 11. Include appropriate pytest tests.
 12. Every generated file must contain complete content.
-13. Return ONLY valid JSON.
-14. Do not use markdown code fences.
+13. NEVER modify the repository root main.py.
+14. The repository root main.py is protected infrastructure.
+15. Return ONLY valid JSON.
+16. Do not use markdown code fences.
 
 JSON FORMAT:
 
@@ -280,11 +286,17 @@ JSON FORMAT:
         )
 
         if not files:
-            raise ValueError(
-                "No implementation files were provided."
-            )
+            return {
+                "status": "implementation_applied",
+                "repository": str(repository),
+                "changed_files": [],
+                "skipped_files": [],
+                "total_files": 0,
+                "next_stage": "testing"
+            }
 
         changed_files = []
+        skipped_files = []
 
         protected_directories = {
             ".git",
@@ -329,6 +341,19 @@ JSON FORMAT:
                     "Implementation contains "
                     "an empty file path."
                 )
+
+            normalized_path = file_path.replace(
+                "\\",
+                "/"
+            ).strip("/")
+
+            if normalized_path in self.PROTECTED_FILES:
+
+                skipped_files.append(
+                    normalized_path
+                )
+
+                continue
 
             if action not in {
                 "create",
@@ -399,10 +424,9 @@ JSON FORMAT:
 
         return {
             "status": "implementation_applied",
-            "repository": str(
-                repository
-            ),
+            "repository": str(repository),
             "changed_files": changed_files,
+            "skipped_files": skipped_files,
             "total_files": len(
                 changed_files
             ),

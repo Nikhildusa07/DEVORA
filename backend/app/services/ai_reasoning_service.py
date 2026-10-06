@@ -1,4 +1,5 @@
 import os
+import time
 
 from dotenv import load_dotenv
 from google import genai
@@ -14,7 +15,14 @@ class AIReasoningService:
         "gemini-3.7-flash",
         "gemini-3.6-flash",
         "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.1-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
     ]
+
+    MAX_RETRIES_PER_MODEL = 2
+    RETRY_DELAY_SECONDS = 2
 
     def __init__(self):
 
@@ -29,6 +37,102 @@ class AIReasoningService:
 
         self.client = genai.Client(
             api_key=api_key
+        )
+
+    def _is_temporary_error(
+        self,
+        error
+    ):
+
+        error_text = str(error).lower()
+
+        temporary_errors = [
+            "503",
+            "unavailable",
+            "high demand",
+            "429",
+            "resource exhausted",
+            "rate limit",
+            "too many requests",
+            "temporarily unavailable",
+            "internal server error",
+            "500",
+            "502",
+            "504",
+        ]
+
+        return any(
+            message in error_text
+            for message in temporary_errors
+        )
+
+    def _generate_with_fallback(
+        self,
+        prompt: str
+    ):
+
+        errors = []
+
+        for model in self.MODELS:
+
+            for attempt in range(
+                1,
+                self.MAX_RETRIES_PER_MODEL + 1
+            ):
+
+                try:
+
+                    response = (
+                        self.client.models.generate_content(
+                            model=model,
+                            contents=prompt
+                        )
+                    )
+
+                    result = response.text
+
+                    if not result:
+                        raise RuntimeError(
+                            "AI model returned an empty response."
+                        )
+
+                    return {
+                        "model": model,
+                        "result": result
+                    }
+
+                except Exception as error:
+
+                    error_details = {
+                        "model": model,
+                        "attempt": attempt,
+                        "error": str(error)
+                    }
+
+                    errors.append(
+                        error_details
+                    )
+
+                    if (
+                        self._is_temporary_error(
+                            error
+                        )
+                        and attempt
+                        < self.MAX_RETRIES_PER_MODEL
+                    ):
+
+                        time.sleep(
+                            self.RETRY_DELAY_SECONDS
+                        )
+
+                        continue
+
+                    break
+
+        raise RuntimeError(
+            "All configured Gemini models are "
+            "currently unavailable.\n"
+            f"Attempts: {errors}"
         )
 
     def reason(
@@ -84,43 +188,14 @@ Only provide a reasoning and implementation plan.
 Return the result in clear structured text.
 """
 
-        errors = []
+        result = self._generate_with_fallback(
+            prompt
+        )
 
-        for model in self.MODELS:
-
-            try:
-
-                response = (
-                    self.client.models.generate_content(
-                        model=model,
-                        contents=prompt
-                    )
-                )
-
-                result = response.text
-
-                if not result:
-                    raise RuntimeError(
-                        "AI model returned an empty response."
-                    )
-
-                return {
-                    "status": "ai_reasoning_completed",
-                    "model": model,
-                    "requirement": requirement,
-                    "reasoning": result,
-                    "next_stage": "implementation"
-                }
-
-            except Exception as error:
-
-                errors.append({
-                    "model": model,
-                    "error": str(error)
-                })
-
-        raise RuntimeError(
-            "All configured Gemini models are currently "
-            "unavailable.\n"
-            f"Attempts: {errors}"
-        )   
+        return {
+            "status": "ai_reasoning_completed",
+            "model": result["model"],
+            "requirement": requirement,
+            "reasoning": result["result"],
+            "next_stage": "implementation"
+        }
