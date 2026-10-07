@@ -16,7 +16,7 @@ function App() {
 
     try {
       const response = await fetch(
-        "http://127.0.0.1:8000/api/autonomous-workflow/autonomous/execute",
+        "https://devora-ah49.onrender.com/api/autonomous-workflow/autonomous/execute",
         {
           method: "POST",
           headers: {
