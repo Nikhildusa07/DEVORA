@@ -117,7 +117,12 @@ app.include_router(monitoring_router)
 app.include_router(regression_router)
 app.include_router(rollback_router)
 app.include_router(repository_memory_router)
-app.include_router(autonomous_workflow_router)
+
+app.include_router(
+    autonomous_workflow_router,
+    prefix="/api/autonomous-workflow"
+)
+
 app.include_router(ai_reasoning_router)
 app.include_router(ai_implementation_router)
 app.include_router(attendance_router)
