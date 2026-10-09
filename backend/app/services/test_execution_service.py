@@ -24,11 +24,27 @@ class TestExecutionService:
                 "Repository path is not a directory."
             )
 
+        tests_directory = repository / "tests"
+
+        if not tests_directory.exists():
+            backend_tests_directory = (
+                repository / "backend" / "tests"
+            )
+
+            if backend_tests_directory.exists():
+                test_target = "backend/tests"
+
+            else:
+                test_target = "tests"
+
+        else:
+            test_target = "tests"
+
         command = [
             sys.executable,
             "-m",
             "pytest",
-            "tests",
+            test_target,
             "-q"
         ]
 
@@ -36,21 +52,30 @@ class TestExecutionService:
 
         environment["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
 
+        python_paths = [
+            str(repository)
+        ]
+
+        backend_directory = repository / "backend"
+
+        if backend_directory.exists():
+            python_paths.append(
+                str(backend_directory)
+            )
+
         existing_pythonpath = environment.get(
             "PYTHONPATH",
             ""
         )
 
         if existing_pythonpath:
-            environment["PYTHONPATH"] = (
-                str(repository)
-                + os.pathsep
-                + existing_pythonpath
+            python_paths.append(
+                existing_pythonpath
             )
-        else:
-            environment["PYTHONPATH"] = str(
-                repository
-            )
+
+        environment["PYTHONPATH"] = (
+            os.pathsep.join(python_paths)
+        )
 
         creation_flags = 0
 
@@ -73,7 +98,9 @@ class TestExecutionService:
 
             return {
                 "repository": str(repository),
-                "command": "pytest tests -q",
+                "command": (
+                    f"pytest {test_target} -q"
+                ),
                 "return_code": result.returncode,
                 "status": (
                     "passed"
@@ -118,7 +145,9 @@ class TestExecutionService:
 
             return {
                 "repository": str(repository),
-                "command": "pytest tests -q",
+                "command": (
+                    f"pytest {test_target} -q"
+                ),
                 "return_code": -1,
                 "status": "failed",
                 "output": output,
