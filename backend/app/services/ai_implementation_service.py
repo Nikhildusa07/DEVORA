@@ -12,13 +12,13 @@ load_dotenv()
 class AIImplementationService:
 
     MODELS = [
-        "gemini-3.5-flash-lite",
-        "gemini-2.5-flash-lite",
-        "gemini-3.8-flash"
+        "gemini-3.5-flash",
+        "gemini-3.6-flash"
     ]
 
     PROTECTED_FILES = {
-        "main.py"
+        "main.py",
+        "backend/main.py"
     }
 
     def __init__(self):
@@ -162,10 +162,11 @@ RULES:
 10. Do not introduce a new database framework unless required.
 11. Include appropriate pytest tests.
 12. Every generated file must contain complete content.
-13. NEVER modify the repository root main.py.
-14. The repository root main.py is protected infrastructure.
-15. Return ONLY valid JSON.
-16. Do not use markdown code fences.
+13. NEVER modify main.py.
+14. NEVER modify backend/main.py.
+15. NEVER modify protected infrastructure files.
+16. Return ONLY valid JSON.
+17. Do not use markdown code fences.
 
 JSON FORMAT:
 
