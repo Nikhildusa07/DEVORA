@@ -23,8 +23,7 @@ function App() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            repository_path:
-              "C:\\Users\\R.K COMPUTERS\\OneDrive\\Desktop\\DEVORA",
+            repository_path: ".",
 
             requirement: requirement,
 
