@@ -24,9 +24,7 @@ function App() {
           },
           body: JSON.stringify({
             repository_path: ".",
-
             requirement: requirement,
-
             code: `
 def example():
     return True
@@ -94,6 +92,15 @@ def example():
     return "COMPLETED";
   };
 
+  const testOutput =
+    result?.test_execution?.output || "";
+
+  const testError =
+    result?.test_execution?.error || "";
+
+  const regressionDetails =
+    result?.regression_detection || null;
+
   return (
     <div className="devora-app">
       <header className="navbar">
@@ -102,6 +109,7 @@ def example():
 
           <div>
             <h1>DEVORA</h1>
+
             <span>
               Autonomous AI Software Engineering
             </span>
@@ -299,10 +307,97 @@ def example():
 
             <div className="workflow-summary">
               <span>WORKFLOW STATUS</span>
+
               <strong>
                 {result.status?.toUpperCase()}
               </strong>
             </div>
+
+            {result.test_execution?.status ===
+              "failed" && (
+              <div className="diagnostic-panel">
+                <div className="section-header">
+                  <div>
+                    <span className="section-label">
+                      FAILURE DIAGNOSIS
+                    </span>
+
+                    <h3>
+                      Test execution details
+                    </h3>
+                  </div>
+                </div>
+
+                <div className="diagnostic-item">
+                  <span>COMMAND</span>
+
+                  <pre>
+                    {result.test_execution?.command ||
+                      "pytest"}
+                  </pre>
+                </div>
+
+                <div className="diagnostic-item">
+                  <span>TEST OUTPUT</span>
+
+                  <pre>
+                    {testOutput ||
+                      "No test output returned."}
+                  </pre>
+                </div>
+
+                <div className="diagnostic-item">
+                  <span>TEST ERROR</span>
+
+                  <pre>
+                    {testError ||
+                      "No test error returned."}
+                  </pre>
+                </div>
+
+                {result.debugging && (
+                  <div className="diagnostic-item">
+                    <span>AI FAILURE DIAGNOSIS</span>
+
+                    <pre>
+                      {JSON.stringify(
+                        result.debugging,
+                        null,
+                        2
+                      )}
+                    </pre>
+                  </div>
+                )}
+
+                {result.auto_fix && (
+                  <div className="diagnostic-item">
+                    <span>AUTO-FIX ANALYSIS</span>
+
+                    <pre>
+                      {JSON.stringify(
+                        result.auto_fix,
+                        null,
+                        2
+                      )}
+                    </pre>
+                  </div>
+                )}
+
+                {regressionDetails && (
+                  <div className="diagnostic-item">
+                    <span>REGRESSION ANALYSIS</span>
+
+                    <pre>
+                      {JSON.stringify(
+                        regressionDetails,
+                        null,
+                        2
+                      )}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            )}
           </section>
         )}
 
