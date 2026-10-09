@@ -21,6 +21,15 @@ class AIImplementationService:
         "backend/main.py"
     }
 
+    PROTECTED_DIRECTORIES = {
+        ".git",
+        "venv",
+        ".venv",
+        "__pycache__",
+        ".pytest_cache",
+        "node_modules"
+    }
+
     def __init__(self):
 
         api_key = os.getenv("GEMINI_API_KEY")
@@ -53,15 +62,6 @@ class AIImplementationService:
                 "Repository path is not a directory."
             )
 
-        ignored = {
-            ".git",
-            "venv",
-            ".venv",
-            "__pycache__",
-            ".pytest_cache",
-            "node_modules"
-        }
-
         files = []
 
         for path in repository.rglob("*"):
@@ -70,7 +70,7 @@ class AIImplementationService:
                 continue
 
             if any(
-                part in ignored
+                part in self.PROTECTED_DIRECTORIES
                 for part in path.parts
             ):
                 continue
@@ -102,6 +102,85 @@ class AIImplementationService:
             )
 
         return response.text
+
+    def _clean_json_response(
+        self,
+        result: str
+    ):
+
+        result = result.strip()
+
+        if result.startswith("```json"):
+            result = result[7:]
+
+        elif result.startswith("```"):
+            result = result[3:]
+
+        if result.endswith("```"):
+            result = result[:-3]
+
+        return result.strip()
+
+    def _validate_implementation(
+        self,
+        files_result: list
+    ):
+
+        if not files_result:
+            raise ValueError(
+                "AI generated no implementation files."
+            )
+
+        production_files = []
+
+        for file_data in files_result:
+
+            if not isinstance(
+                file_data,
+                dict
+            ):
+                raise ValueError(
+                    "Invalid implementation file definition."
+                )
+
+            path = str(
+                file_data.get(
+                    "path",
+                    ""
+                )
+            ).strip()
+
+            if not path:
+                raise ValueError(
+                    "Implementation contains an empty file path."
+                )
+
+            normalized_path = path.replace(
+                "\\",
+                "/"
+            ).strip("/")
+
+            filename = Path(
+                normalized_path
+            ).name.lower()
+
+            if (
+                filename.startswith("test_")
+                or filename.endswith("_test.py")
+                or "/tests/" in f"/{normalized_path}/"
+            ):
+                continue
+
+            production_files.append(
+                normalized_path
+            )
+
+        if not production_files:
+            raise ValueError(
+                "AI generated tests without production "
+                "implementation. A real implementation "
+                "must be generated before tests."
+            )
 
     def generate_implementation(
         self,
@@ -135,9 +214,8 @@ class AIImplementationService:
 You are DEVORA, an autonomous AI
 software engineering implementation engine.
 
-Generate the actual code changes required
-to implement the requirement inside the
-existing repository.
+Your job is to implement the user's requirement
+inside the EXISTING repository.
 
 REQUIREMENT:
 {requirement}
@@ -148,25 +226,54 @@ AI REASONING:
 EXISTING REPOSITORY FILES:
 {repository_files}
 
-RULES:
+IMPORTANT IMPLEMENTATION RULES:
 
-1. Generate only necessary files.
-2. Prefer modifying existing files when appropriate.
-3. Never delete existing files.
-4. Never modify .env files.
-5. Never modify .git configuration.
-6. Never modify virtual environments.
-7. Never generate secrets or API keys.
-8. Preserve the existing architecture.
-9. Use the technologies already present in the repository.
-10. Do not introduce a new database framework unless required.
-11. Include appropriate pytest tests.
-12. Every generated file must contain complete content.
-13. NEVER modify main.py.
-14. NEVER modify backend/main.py.
-15. NEVER modify protected infrastructure files.
-16. Return ONLY valid JSON.
-17. Do not use markdown code fences.
+1. You MUST generate the actual production implementation.
+2. Tests are supplementary and MUST NOT replace implementation.
+3. NEVER return only test files.
+4. Every requested feature must have corresponding
+   production code.
+5. If the requirement asks for an API endpoint:
+   - create the required API route/module;
+   - implement the endpoint;
+   - use the existing FastAPI architecture;
+   - integrate the route into the existing application
+     using the project's existing routing mechanism.
+6. If an existing router/module is appropriate,
+   modify that existing production file.
+7. If a new module is required, create the module.
+8. The implementation must actually make the requested
+   endpoint or feature reachable from the application.
+9. After production implementation is generated,
+   generate appropriate pytest tests for it.
+10. Never generate tests for functionality that you
+    did not implement.
+11. Never delete existing files.
+12. Never modify .env files.
+13. Never modify .git configuration.
+14. Never modify virtual environments.
+15. Never generate secrets or API keys.
+16. Preserve the existing architecture.
+17. Use technologies already present in the repository.
+18. Do not introduce a new database framework unless required.
+19. Every generated file must contain complete content.
+20. NEVER modify main.py.
+21. NEVER modify backend/main.py.
+22. NEVER overwrite protected infrastructure.
+23. Do not create duplicate endpoints.
+24. Do not create placeholder implementations.
+25. Do not return explanations outside the JSON.
+26. Return ONLY valid JSON.
+27. Do not use markdown code fences.
+
+CRITICAL:
+
+Before returning the JSON, verify mentally:
+
+- Does the production code actually implement the requirement?
+- If this is an API requirement, does the endpoint become reachable?
+- Is there at least one production implementation file?
+- Are tests only testing functionality that actually exists?
 
 JSON FORMAT:
 
@@ -174,9 +281,14 @@ JSON FORMAT:
     "summary": "short implementation summary",
     "files": [
         {{
-            "path": "relative/path/to/file.py",
+            "path": "relative/path/to/production/file.py",
             "action": "create",
-            "content": "complete file content"
+            "content": "complete production file content"
+        }},
+        {{
+            "path": "relative/path/to/test_file.py",
+            "action": "create",
+            "content": "complete pytest file content"
         }}
     ]
 }}
@@ -193,18 +305,9 @@ JSON FORMAT:
                     prompt
                 )
 
-                result = result.strip()
-
-                if result.startswith("```json"):
-                    result = result[7:]
-
-                if result.startswith("```"):
-                    result = result[3:]
-
-                if result.endswith("```"):
-                    result = result[:-3]
-
-                result = result.strip()
+                result = self._clean_json_response(
+                    result
+                )
 
                 implementation = json.loads(
                     result
@@ -231,6 +334,10 @@ JSON FORMAT:
                         "AI implementation response "
                         "must contain a files list."
                     )
+
+                self._validate_implementation(
+                    files_result
+                )
 
                 return {
                     "status": "implementation_generated",
@@ -298,15 +405,6 @@ JSON FORMAT:
 
         changed_files = []
         skipped_files = []
-
-        protected_directories = {
-            ".git",
-            "venv",
-            ".venv",
-            "__pycache__",
-            ".pytest_cache",
-            "node_modules"
-        }
 
         for file_data in files:
 
@@ -382,7 +480,7 @@ JSON FORMAT:
                 )
 
             if any(
-                part in protected_directories
+                part in self.PROTECTED_DIRECTORIES
                 for part in target_file.parts
             ):
 
